@@ -157,10 +157,14 @@ class UserRole(str, Enum):
     DOCTOR = "doctor"
     ADMIN = "admin"
 
+# while creating a user, the user will provide username, email, password, and role.
+# The is_active field will be controlled by the admin and not provided by the user.
+
 
 class UserCreate(BaseModel):
     username: str
-    email: str
+    email: str = Field(
+        pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
     password: str
     role: UserRole
     # is_active: bool this will be controlled by the admin, not user input
@@ -170,9 +174,28 @@ class UserResponse(BaseModel):
     user_id: int
     username: str  # never return password in response
     email: str
-    role: str
+    role: UserRole
     is_active: bool
 
     model_config = {
         "from_attributes": True
     }
+
+# What user information do I want to work with after the user has already been authenticated?
+
+
+class User(BaseModel):
+    username: str
+    email: str = Field(
+        pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+    role: UserRole
+    is_active: bool
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: str | None = None
