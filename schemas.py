@@ -37,6 +37,9 @@ class Patient(BaseModel):
     address: str | None = None
 
 
+class PatientCreate(Patient):
+    pass
+
 # --------------------------------------------------------------------------------------
 # Response model for Patient, used to return patient data from the database.
 # It includes the patient's ID and other details. The model_config is set to allow
@@ -44,15 +47,8 @@ class Patient(BaseModel):
 # --------------------------------------------------------------------------------------
 
 
-class PatientResponse(BaseModel):
+class PatientResponse(Patient):
     patient_id: int
-    name: str
-    age: int
-    gender: str
-    blood_group: BloodGroup | None = None
-    allergies: str | None = None
-    phone: str
-    address: str | None = None
 
     model_config = {
         "from_attributes": True
@@ -72,13 +68,12 @@ class Doctor(BaseModel):
         pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
-class DoctorResponse(BaseModel):
+class DoctorCreate(Doctor):
+    pass
+
+
+class DoctorResponse(Doctor):
     doctor_id: int
-    name: str
-    specialization: str
-    license_number: str
-    phone: str
-    email: str
     is_active: bool
 
     model_config = {
@@ -98,13 +93,12 @@ class Appointment(BaseModel):
     reason: str | None = None
 
 
-class AppointmentResponse(BaseModel):
+class AppointmentCreate(Appointment):
+    pass
+
+
+class AppointmentResponse(Appointment):
     appointment_id: int
-    patient_id: int
-    doctor_id: int
-    appointment_date: Date
-    appointment_time: Time
-    reason: str | None = None
 
     model_config = {
         "from_attributes": True
@@ -124,32 +118,21 @@ class MedicalRecord(BaseModel):
     notes: str | None = None
 
 
-class MedicalRecordResponse(BaseModel):
+class MedicalRecordCreate(MedicalRecord):
+    pass
+
+
+class MedicalRecordResponse(MedicalRecord):
     record_id: int
-    appointment_id: int
-    patient_id: int
-    doctor_id: int
-    diagnosis: str
-    symptoms: str
-    notes: str
 
     model_config = {
         "from_attributes": True
     }
 
 
-class MMedicalRecordHistory(BaseModel):
-    # record_id: int not required , will come from the URL
-    diagnosis: str | None = None
-    symptoms: str | None = None
-    notes: str | None = None
-
-
-class MedicalRecordHistoryResponse(BaseModel):
-    update_id: int
-    diagnosis: str | None = None
-    symptoms: str | None = None
-    notes: str | None = None
+# -------------------------
+# User Schema
+# -------------------------
 
 
 class UserRole(str, Enum):
@@ -161,7 +144,7 @@ class UserRole(str, Enum):
 # The is_active field will be controlled by the admin and not provided by the user.
 
 
-class UserCreate(BaseModel):
+class User(BaseModel):
     username: str
     email: str = Field(
         pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -170,11 +153,12 @@ class UserCreate(BaseModel):
     # is_active: bool this will be controlled by the admin, not user input
 
 
-class UserResponse(BaseModel):
+class UserResponse(User):
+    pass
+
+
+class UserResponse(User):
     user_id: int
-    username: str  # never return password in response
-    email: str
-    role: UserRole
     is_active: bool
 
     model_config = {
@@ -184,7 +168,7 @@ class UserResponse(BaseModel):
 # What user information do I want to work with after the user has already been authenticated?
 
 
-class User(BaseModel):
+class UserModel(BaseModel):
     username: str
     email: str = Field(
         pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")

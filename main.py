@@ -5,9 +5,9 @@ from typing_extensions import Annotated
 from fastapi.security import OAuth2PasswordRequestForm
 
 from auth import ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token, get_current_active_user
-from schemas import AppointmentResponse, Doctor, DoctorResponse, MedicalRecordHistoryResponse, Patient, PatientResponse, Appointment, MedicalRecord, MedicalRecordResponse, Token, User
+from schemas import AppointmentResponse, Doctor, DoctorResponse, Patient, PatientCreate, PatientResponse, Appointment, MedicalRecord, MedicalRecordResponse, Token, User
 from sqlalchemy.orm import Session
-from database import AppointmentDB, Base, MedicalRecordDB, MedicalRecordHistoryDB, engine, get_db, PatientDB, DoctorDB
+from database import AppointmentDB, Base, MedicalRecordDB, engine, get_db, PatientDB, DoctorDB
 from enum import Enum
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
@@ -46,8 +46,8 @@ Base.metadata.create_all(bind=engine)
 
 @app.post("/patients/", response_model=PatientResponse)
 def create_patient(
-    patient: Patient,
-    db: Session = Depends(get_db)
+    patient: PatientCreate,
+    db: Annotated[Session, Depends(get_db)]
 ):
 
     db_patient = PatientDB(
@@ -93,7 +93,7 @@ def create_patient(
 #     return patients
 
 @app.get("/patients/", response_model=list[PatientResponse])
-def get_patients(db: Session = Depends(get_db)):
+def get_patients(db: Annotated[Session, Depends(get_db)]):
 
     patients = db.query(PatientDB).all()
 
@@ -122,7 +122,7 @@ def get_patients(db: Session = Depends(get_db)):
          response_model=PatientResponse)
 def get_patient(
     patient_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_patient = db.query(PatientDB).filter(
         PatientDB.id == patient_id
@@ -164,7 +164,7 @@ def get_patient(
 def update_patient(
     patient_id: int,
     patient: Patient,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
 
     db_patient = db.query(PatientDB).filter(
@@ -219,7 +219,7 @@ def update_patient(
 @app.delete("/patients/{patient_id}")  # No Patient response required here
 def delete_patient(
     patient_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
 
     db_patient = db.query(PatientDB).filter(
@@ -253,7 +253,7 @@ def delete_patient(
 @app.post("/doctors/", response_model=DoctorResponse)
 def create_doctor(
     doctor: Doctor,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_doctor = DoctorDB(
         name=doctor.name,
@@ -276,7 +276,7 @@ def create_doctor(
 
 @app.get("/doctors/", response_model=list[DoctorResponse])
 def get_doctors(
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     doctors = db.query(DoctorDB).all()
 
@@ -290,7 +290,7 @@ def get_doctors(
 @app.get("/doctors/{doctor_id}", response_model=DoctorResponse)
 def get_doctor(
     doctor_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_doctor = db.query(DoctorDB).filter(
         DoctorDB.id == doctor_id
@@ -313,7 +313,7 @@ def get_doctor(
 def update_doctor(
     doctor_id: int,
     doctor: Doctor,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_doctor = db.query(DoctorDB).filter(
         DoctorDB.id == doctor_id
@@ -348,7 +348,7 @@ def update_doctor(
 @app.post("/appointments/", response_model=AppointmentResponse)
 def create_appointment(
     appointment: Appointment,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     # 1. Check if patient exists
     db_patient = db.query(PatientDB).filter(
@@ -422,7 +422,7 @@ def create_appointment(
 
 @app.get("/appointments/", response_model=list[AppointmentResponse])
 def get_appointments(
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     appointments = db.query(AppointmentDB).all()
 
@@ -436,7 +436,7 @@ def get_appointments(
 @app.get("/appointments/{appointment_id}", response_model=AppointmentResponse)
 def get_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_appointment = db.query(AppointmentDB).filter(
         AppointmentDB.id == appointment_id
@@ -458,7 +458,7 @@ def get_appointment(
 @app.patch("/appointments/{appointment_id}/confirm")
 def confirm_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_appointment = db.query(AppointmentDB).filter(
         AppointmentDB.appointment_id == appointment_id
@@ -506,7 +506,7 @@ def confirm_appointment(
 @app.patch("/appointments/{appointment_id}/cancel")
 def cancel_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     db_appointment = db.query(AppointmentDB).filter(
         AppointmentDB.appointment_id == appointment_id
@@ -542,7 +542,7 @@ def cancel_appointment(
 @app.post("/medical-records/", response_model=MedicalRecordResponse)
 def create_medical_record(
     record: MedicalRecord,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     # 1. Check if appointment exists
     db_appointment = db.query(AppointmentDB).filter(
@@ -602,7 +602,7 @@ def create_medical_record(
 
 @app.get("/medical-records/", response_model=list[MedicalRecordResponse])
 def get_medical_records(
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     medical_records = db.query(MedicalRecordDB).all()
 
@@ -616,7 +616,7 @@ def get_medical_records(
 @app.get("/medical-records/{record_id}", response_model=MedicalRecordResponse)
 def get_medical_record(
     record_id: int,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ):
     medical_record = db.query(MedicalRecordDB).filter(
         MedicalRecordDB.record_id == record_id
@@ -629,107 +629,25 @@ def get_medical_record(
         )
 
     return medical_record
-    db: Session = Depends(get_db)
 
 
-# ----------------------------------------------------------------------------------------------------------------------------
-#                                         Medical Records History CRUD Operations
-# ----------------------------------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------
+# Retrieving all Medical Records of a Patient by Patient ID
+# --------------------------------------------------------------
 
-# One appointment has one main medical record, and that medical record can have many updates/history entries.
-# we want an append-only history/versioning design instead of overwriting the existing medical-record row therefore we will have a separate table for medical-record history entries. Each entry will have a foreign key to the main medical-record row and will contain the updated information along with a timestamp. This way, we can keep track of all changes made to a medical record over time without losing any previous data.
-
-# URL                    OR                    Request body
-# ↓                                             ↓
-# /medical-records/10/updates                  "record_id": 10
-
-# We need to decide whether we want to use the record_id from the URL or from the request body.
-# Using the record_id from the URL is more RESTful and makes it clear which medical record we are updating.
-# Therefore, we will use the record_id from the URL and not require it in the request body.
-# So in the MedicalRecordUpdate schema,  we will not include the record_id field but it's still include in
-# database model for MedicalRecordUpdateDB because we need to store it in the database as a foreign key to the main medical-record row.
-
-# -------------------------------------------------
-# Create Medical History by Medical Record ID
-# -------------------------------------------------
-@app.post("/medical-records/{record_id}/history", response_model=MedicalRecordHistoryResponse)
-def create_medical_record_history(
-    record_id: int,
-    history: MedicalRecordHistory,
+@app.get("/patients/{patient_id}/medical-history")
+def get_patient_medical_history(
+    patient_id: int,
     db: Session = Depends(get_db)
 ):
-    # Check if medical record exists
-    db_record = db.query(MedicalRecordDB).filter(
-        MedicalRecordDB.record_id == record_id
-    ).first()
-
-    if not db_record:
-        raise HTTPException(
-            status_code=404,
-            detail="Medical record not found"
-        )
-
-    # Create new history entry
-    db_history = MedicalRecordHistoryDB(
-        record_id=record_id,
-        diagnosis=history.diagnosis,
-        symptoms=history.symptoms,
-        notes=history.notes
+    records = (
+        db.query(MedicalRecordDB)
+        .join(AppointmentDB)
+        .filter(AppointmentDB.patient_id == patient_id)
+        .all()
     )
 
-    db.add(db_history)
-    db.commit()
-    db.refresh(db_history)
-
-    return db_history
-# -------------------------------------------------
-# Retrieving Medical History by Medical Record ID
-# -------------------------------------------------
-
-
-@app.get("/medical-records/{record_id}/history", response_model=list[MedicalRecordHistoryResponse])
-def get_medical_record_history(
-    record_id: int,
-    db: Session = Depends(get_db)
-):
-    # Check if medical record exists
-    db_record = db.query(MedicalRecordDB).filter(
-        MedicalRecordDB.record_id == record_id
-    ).first()
-
-    if not db_record:
-        raise HTTPException(
-            status_code=404,
-            detail="Medical record not found"
-        )
-
-    history = db.query(MedicalRecordHistoryDB).filter(
-        MedicalRecordHistoryDB.record_id == record_id
-    ).all()
-
-    return history
-
-# -------------------------------------------------
-# Retrieving all Medical History by history id
-# -------------------------------------------------
-
-
-@app.get("/medical-record-history/{history_id}", response_model=MedicalRecordHistoryResponse)
-def get_medical_record_history_entry(
-    history_id: int,
-    db: Session = Depends(get_db)
-):
-    db_history = db.query(MedicalRecordHistoryDB).filter(
-        MedicalRecordHistoryDB.history_id == history_id
-    ).first()
-
-    if not db_history:
-        raise HTTPException(
-            status_code=404,
-            detail="Medical record history not found"
-        )
-
-    return db_history
+    return records
 
 
 # ------------------------------------------------------------
@@ -740,7 +658,7 @@ def get_medical_record_history_entry(
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)]
 ) -> Token:
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:

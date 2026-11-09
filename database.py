@@ -3,7 +3,7 @@ from xmlrpc.client import Boolean
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Date, Time
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-# This creates a local SQLite file named 'hospital.db'
+# This creates a local SQLite file named 'hospitalDB.db'
 DATABASE_URL = "sqlite:///./hospitalDB.db"
 
 # Create the database engine
@@ -40,7 +40,7 @@ class Base(DeclarativeBase):
 class PatientDB(Base):
     __tablename__ = "patients"
 
-    id = Column(Integer, primary_key=True)
+    patient_id = Column(Integer, primary_key=True)
     name = Column(String)
     age = Column(Integer)
     gender = Column(String)
@@ -53,7 +53,7 @@ class PatientDB(Base):
 class DoctorDB(Base):
     __tablename__ = "doctors"
 
-    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, primary_key=True)
     name = Column(String)
     specialization = Column(String)
     license_number = Column(String)
@@ -118,20 +118,20 @@ class MedicalRecordDB(Base):
     notes = Column(String, nullable=True)
 
 
-class MedicalRecordHistoryDB(Base):
-    __tablename__ = "medical_record_updates"
+# class MedicalRecordHistoryDB(Base): no need
+#     __tablename__ = "medical_record_updates"
 
-    update_id = Column(Integer, primary_key=True)
+#     update_id = Column(Integer, primary_key=True)
 
-    record_id = Column(
-        Integer,
-        ForeignKey("medical_records.record_id"),
-        nullable=False
-    )
+#     record_id = Column(
+#         Integer,
+#         ForeignKey("medical_records.record_id"),
+#         nullable=False
+#     )
 
-    diagnosis = Column(String, nullable=True)
-    symptoms = Column(String, nullable=True)
-    notes = Column(String, nullable=True)
+#     diagnosis = Column(String, nullable=True)
+#     symptoms = Column(String, nullable=True)
+#     notes = Column(String, nullable=True)
 
 
 class UserDB(Base):
