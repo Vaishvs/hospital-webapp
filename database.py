@@ -41,6 +41,12 @@ class PatientDB(Base):
     __tablename__ = "patients"
 
     patient_id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.user_id"),
+        unique=True,
+        nullable=False
+    )
     name = Column(String)
     age = Column(Integer)
     gender = Column(String)
@@ -48,12 +54,19 @@ class PatientDB(Base):
     allergies = Column(String)
     phone = Column(String)
     address = Column(String)
+    is_active = Column(Boolean, default=True)
 
 
 class DoctorDB(Base):
     __tablename__ = "doctors"
 
     doctor_id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.user_id"),
+        unique=True,
+        nullable=False
+    )
     name = Column(String)
     specialization = Column(String)
     license_number = Column(String)
@@ -143,3 +156,6 @@ class UserDB(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+
+# there's no need to create a separate table for admin. Admin can be managed through the users table by assigning the role as 'admin'
+# and setting is_active to True or False.

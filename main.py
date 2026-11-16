@@ -4,10 +4,10 @@ from typing_extensions import Annotated
 
 from fastapi.security import OAuth2PasswordRequestForm
 
-from auth import ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token, get_current_active_user
-from schemas import AppointmentResponse, Doctor, DoctorResponse, Patient, PatientCreate, PatientResponse, Appointment, MedicalRecord, MedicalRecordResponse, Token, User
+from auth import ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token, get_current_active_user, get_password_hash, require_role
+from schemas import AppointmentResponse, Doctor, DoctorCreate, DoctorResponse, Patient, PatientCreate, PatientResponse, Appointment, MedicalRecord, MedicalRecordResponse, PatientUpdate, Token, User, UserRole
 from sqlalchemy.orm import Session
-from database import AppointmentDB, Base, MedicalRecordDB, engine, get_db, PatientDB, DoctorDB
+from database import AppointmentDB, Base, MedicalRecordDB, UserDB, engine, get_db, PatientDB, DoctorDB
 from enum import Enum
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
@@ -43,14 +43,32 @@ Base.metadata.create_all(bind=engine)
 # -------------------------
 # Creating Patients
 # -------------------------
-
 @app.post("/patients/", response_model=PatientResponse)
-def create_patient(
+async def create_patient(
     patient: PatientCreate,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
 
+    # Step 1: Create user account
+    db_user = UserDB(
+        username=patient.username,
+        email=patient.email,
+        hashed_password=get_password_hash(patient.password),
+        role="patient",
+        is_active=True
+    )
+
+    db.add(db_user)
+
+    # Step 2: Generate user_id
+    db.flush()
+
+    # Step 3: Create patient profile
     db_patient = PatientDB(
+        user_id=db_user.user_id,
         name=patient.name,
         age=patient.age,
         gender=patient.gender,
@@ -61,15 +79,12 @@ def create_patient(
     )
 
     db.add(db_patient)
+
+    # Step 4: Save both records
     db.commit()
     db.refresh(db_patient)
 
-    # return {
-    #     "patient_id": db_patient.id,
-    #     "patient": db_patient
-    # }
     return db_patient
-
 
 # @app.post("/patients/")
 # async def create_patient(patient: Patient):
@@ -91,13 +106,17 @@ def create_patient(
 # @app.get("/patients/")
 # def getPatients():
 #     return patients
-
 @app.get("/patients/", response_model=list[PatientResponse])
-def get_patients(db: Annotated[Session, Depends(get_db)]):
-
+def get_patients(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
+):
     patients = db.query(PatientDB).all()
 
     return patients
+
 
 # -------------------------------------
 # Searching  Patients by Patient ID
@@ -122,10 +141,13 @@ def get_patients(db: Annotated[Session, Depends(get_db)]):
          response_model=PatientResponse)
 def get_patient(
     patient_id: int,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
     db_patient = db.query(PatientDB).filter(
-        PatientDB.id == patient_id
+        PatientDB.patient_id == patient_id
     ).first()
 
     if db_patient is None:
@@ -164,11 +186,14 @@ def get_patient(
 def update_patient(
     patient_id: int,
     patient: Patient,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
 
     db_patient = db.query(PatientDB).filter(
-        PatientDB.id == patient_id
+        PatientDB.patient_id == patient_id
     ).first()
 
     if db_patient is None:
@@ -216,14 +241,17 @@ def update_patient(
 #         "patient": deleted_patient
 #     }
 
-@app.delete("/patients/{patient_id}")  # No Patient response required here
-def delete_patient(
+@app.delete("/patients/{patient_id}")
+async def delete_patient(
     patient_id: int,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
 
     db_patient = db.query(PatientDB).filter(
-        PatientDB.id == patient_id
+        PatientDB.patient_id == patient_id
     ).first()
 
     if db_patient is None:
@@ -241,47 +269,109 @@ def delete_patient(
     }
 
 
+# Defines what the API sends back to the patient in the swagger response.
+# It is a Pydantic model that specifies the fields and their types.
+# The model_config is set to allow conversion from SQLAlchemy models to Pydantic models.
+
+# -------------------------------------
+# Patient updating his own information
+# -------------------------------------
+@app.patch("/patients/me/", response_model=PatientResponse)
+def update_my_patient_profile(
+    patient: PatientUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.PATIENT))
+    ]
+):
+    # Find the patient profile belonging to the logged-in user
+    db_patient = db.query(PatientDB).filter(
+        PatientDB.user_id == current_user.user_id
+    ).first()
+
+    if db_patient is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient profile not found"
+        )
+
+    # Get only the fields provided by the patient
+    update_data = patient.model_dump(exclude_unset=True)
+
+    # Update the corresponding database attributes
+    for key, value in update_data.items():
+        setattr(db_patient, key, value)
+
+    db.commit()
+    db.refresh(db_patient)
+
+    return db_patient
+
 # ----------------------------------------------------------------------------------------------------------------------------
 #                                         Doctors CRUD Operations
-# ----------------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------------@
 
 
 # -------------------------
 # Creating Doctors
 # -------------------------
 
+
 @app.post("/doctors/", response_model=DoctorResponse)
-def create_doctor(
-    doctor: Doctor,
-    db: Annotated[Session, Depends(get_db)]
+async def create_doctor(
+    doctor: DoctorCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
+    # Step 1: Create the login account in users table
+    db_user = UserDB(
+        username=doctor.username,
+        email=doctor.email,
+        hashed_password=get_password_hash(doctor.password),
+        role="doctor",
+        is_active=True
+    )
+
+    db.add(db_user)
+
+    # Step 2: Generate user_id without committing
+    db.flush()
+
+    # Step 3: Create the doctor profile
     db_doctor = DoctorDB(
+        user_id=db_user.user_id,
         name=doctor.name,
         specialization=doctor.specialization,
         license_number=doctor.license_number,
         phone=doctor.phone,
-        email=doctor.email
+        email=doctor.email,
+        is_active=True
     )
 
     db.add(db_doctor)
+
+    # Step 4: Save both records
     db.commit()
+
     db.refresh(db_doctor)
 
     return db_doctor
-
 # -------------------------
 # Retrieving Doctors
 # -------------------------
 
 
 @app.get("/doctors/", response_model=list[DoctorResponse])
-def get_doctors(
-    db: Annotated[Session, Depends(get_db)]
+async def get_doctors(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
     doctors = db.query(DoctorDB).all()
-
     return doctors
-
 # ---------------------------------
 # Retrieving Doctors by Doctor ID
 # ---------------------------------
@@ -290,10 +380,13 @@ def get_doctors(
 @app.get("/doctors/{doctor_id}", response_model=DoctorResponse)
 def get_doctor(
     doctor_id: int,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
     db_doctor = db.query(DoctorDB).filter(
-        DoctorDB.id == doctor_id
+        DoctorDB.doctor_id == doctor_id
     ).first()
 
     if db_doctor is None:
@@ -310,13 +403,16 @@ def get_doctor(
 
 
 @app.put("/doctors/{doctor_id}", response_model=DoctorResponse)
-def update_doctor(
+async def update_doctor(
     doctor_id: int,
-    doctor: Doctor,
-    db: Annotated[Session, Depends(get_db)]
+    doctor: DoctorCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[
+        UserDB, Depends(require_role(UserRole.ADMIN))
+    ]
 ):
     db_doctor = db.query(DoctorDB).filter(
-        DoctorDB.id == doctor_id
+        DoctorDB.doctor_id == doctor_id
     ).first()
 
     if db_doctor is None:
@@ -349,6 +445,7 @@ def update_doctor(
 def create_appointment(
     appointment: Appointment,
     db: Annotated[Session, Depends(get_db)]
+
 ):
     # 1. Check if patient exists
     db_patient = db.query(PatientDB).filter(
@@ -439,7 +536,7 @@ def get_appointment(
     db: Annotated[Session, Depends(get_db)]
 ):
     db_appointment = db.query(AppointmentDB).filter(
-        AppointmentDB.id == appointment_id
+        AppointmentDB.appointment_id == appointment_id
     ).first()
 
     if db_appointment is None:
@@ -676,6 +773,55 @@ async def login_for_access_token(
 
 @app.get("/users/me/")
 async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_active_user)],
-) -> User:
+    current_user: Annotated[UserDB, Depends(get_current_active_user)],
+):
     return current_user
+
+# There are actually two separate processes:
+# Process 1: Generating the token
+# login_for_access_token() → create_access_token() → JWT returned to Swagger.
+# Process 2: Receiving the token
+# The token is in now swagger and when you click on "Authorize" in Swagger, it sends the token in the Authorization header of subsequent requests.
+# The get_current_user() function is called to decode the JWT and retrieve the user information from the database. This is done through the dependency injection mechanism of FastAPI,
+# where the token is passed to get_current_user() via Depends(oauth2_scheme). The decoded user information is then returned to the endpoint that requires authentication.
+# Swagger → Authorization header → OAuth2PasswordBearer → get_current_user(token) → jwt.decode().
+# The connection between these two processes is the JWT returned in the HTTP response and subsequently sent back in the HTTP Authorization header.
+
+
+# HOW SWAGGER AUTHENTICATION WORKS:
+#
+# 1. OAuth2PasswordBearer(tokenUrl="token") defines the OAuth2
+#    authentication scheme.
+#
+# 2. FastAPI includes this configuration in its OpenAPI documentation.
+#    Swagger UI reads it and automatically displays the Authorize button.
+#
+# 3. When we click Authorize, Swagger sends the username and password
+#    to the /token endpoint.
+#
+# 4. login_for_access_token() calls authenticate_user() to verify
+#    the credentials and create_access_token() to generate a JWT.
+#
+# 5. The JWT is returned to Swagger, which stores it for subsequent
+#    protected API requests.
+#
+# 6. When a protected endpoint like /users/me/ is called, Swagger
+#    automatically sends the JWT in the Authorization header:
+#    Authorization: Bearer <JWT>
+#
+# 7. OAuth2PasswordBearer extracts the JWT from the Authorization
+#    header and passes it to get_current_user().
+#
+# 8. get_current_user() decodes and validates the JWT using jwt.decode(),
+#    retrieves the user from the database, and returns the user.
+#
+# 9. get_current_active_user() checks whether the user is active.
+#
+# IMPORTANT:
+# - Manually executing POST /token generates a JWT.
+# - Clicking Swagger's Authorize button calls POST /token again
+#   and generates another JWT.
+# - Both tokens may or may not be identical, depending on their payload
+#   and expiration timestamp.
+# - We don't need to manually execute POST /token before clicking
+#   Authorize. Swagger can generate and store the token itself.

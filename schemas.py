@@ -1,9 +1,10 @@
 from sqlite3 import Date, Time
+from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Session
 from database import PatientDB, engine, Base, get_db
 from enum import Enum
 from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # -------------------------
@@ -38,7 +39,11 @@ class Patient(BaseModel):
 
 
 class PatientCreate(Patient):
-    pass
+    username: str
+    password: str
+    email: str = Field(
+        pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
 
 # --------------------------------------------------------------------------------------
 # Response model for Patient, used to return patient data from the database.
@@ -49,18 +54,36 @@ class PatientCreate(Patient):
 
 class PatientResponse(Patient):
     patient_id: int
+    user_id: int
+    is_active: bool
 
     model_config = {
         "from_attributes": True
     }
 
 
+class PatientUpdate(BaseModel):
+
+    name: str | None = None
+    phone: str | None = None
+    age: int | None = None
+
+    @field_validator("name", "phone", mode="before")
+    @classmethod
+    def prevent_null_or_empty(cls, value):
+
+        if value is None or (isinstance(value, str) and not value.strip()):
+            raise ValueError("This field cannot be empty or null")
+
+        return value
 # -------------------------
 # Doctor Schema
 # -------------------------
 
+
 class Doctor(BaseModel):
     name: str = Field(min_length=2, max_length=50)
+    # user_id: int
     specialization: str = Field(min_length=2, max_length=100)
     license_number: str = Field(min_length=2, max_length=50)
     phone: str = Field(pattern=r"^[0-9]{10}$")
@@ -69,21 +92,27 @@ class Doctor(BaseModel):
 
 
 class DoctorCreate(Doctor):
-    pass
+    # you don't need to mention user id in the DoctorCreate schema because it will be automatically generated when a new doctor is created. The user_id will be linked to the corresponding user in the users table.
+    # user_id: int | None = Field(default=None, exclude=True)
+    username: str
+    password: str
 
 
 class DoctorResponse(Doctor):
     doctor_id: int
+    user_id: int
     is_active: bool
 
     model_config = {
         "from_attributes": True
     }
 
-
+# DoctorCreate is used for incoming data from the Admin.
+# DoctorResponse is used for outgoing data returned by your API. i.e Admin receives JSON response in Swagger
 # -------------------------
 # Appointment Schema
 # -------------------------
+
 
 class Appointment(BaseModel):
     patient_id: int
@@ -153,12 +182,11 @@ class User(BaseModel):
     # is_active: bool this will be controlled by the admin, not user input
 
 
-class UserResponse(User):
-    pass
-
-
-class UserResponse(User):
+class UserResponse(BaseModel):
     user_id: int
+    username: str
+    email: str
+    role: UserRole
     is_active: bool
 
     model_config = {
